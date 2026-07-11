@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "KnowledgeVault Capturer",
+  "version": "1.0.0",
+  "description": "Capture saved Facebook posts/reels into your local KnowledgeVault (no cloud, all local).",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://facebook.com/*",
+    "https://www.facebook.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://facebook.com/*", "https://www.facebook.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "KnowledgeVault Capturer"
+  }
+}

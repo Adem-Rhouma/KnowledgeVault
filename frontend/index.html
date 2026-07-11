@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KnowledgeVault</title>
+    <link rel="stylesheet" href="/css/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">◈</span>
+          <span>KnowledgeVault</span>
+        </div>
+        <nav id="nav">
+          <a href="#/dashboard" data-view="dashboard">Dashboard</a>
+          <a href="#/chat" data-view="chat">Chat</a>
+          <a href="#/review" data-view="review">Review</a>
+          <a href="#/items" data-view="items">Items</a>
+        </nav>
+        <div class="sidebar-foot" id="model-info"></div>
+      </aside>
+      <main id="view" class="view"></main>
+    </div>
+    <script type="module" src="/js/app.js"></script>
+  </body>
+</html>

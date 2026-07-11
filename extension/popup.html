@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>KnowledgeVault Capturer</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>KnowledgeVault</h1>
+      <p class="sub">Capture saved Facebook posts/reels to your local vault.</p>
+
+      <label>Backend URL</label>
+      <input id="backend" type="text" placeholder="http://localhost:8000" />
+
+      <div class="row">
+        <button id="open">Open Saved</button>
+        <button id="scan">Scan now</button>
+      </div>
+      <div class="row">
+        <button id="auto">Auto-capture: off</button>
+      </div>
+
+      <div class="stats">
+        <div>captured: <b id="cap">0</b></div>
+        <div>sent: <b id="sent">0</b></div>
+      </div>
+      <div id="err" class="err"></div>
+      <p class="hint">Open facebook.com/saved, then click Auto-capture and scroll. Items are sent to your local backend as you go.</p>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

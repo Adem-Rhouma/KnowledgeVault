@@ -1,0 +1,28 @@
+# env / secrets
+.env
+.env.local
+
+# python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# data (runtime, incremental JSON store + downloaded media)
+data/
+backend/data/
+*.tmp
+
+# node
+node_modules/
+
+# browser extension build artifacts
+extension/dist/
+
+# local facebook cookies (do not commit)
+cookies.txt
+
+# OS
+.DS_Store
+Thumbs.db
