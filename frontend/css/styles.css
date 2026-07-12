@@ -24,6 +24,10 @@ body {
   line-height: 1.5;
 }
 
+/* all inline links: one high-contrast color visible on the dark background */
+a { color: var(--accent-2); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
 #app { display: flex; min-height: 100vh; }
 
 .sidebar {
@@ -147,12 +151,12 @@ label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 4px;
 .include-review { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; color: var(--muted); }
 .result { border-left: 3px solid var(--accent); }
 .result .title { font-size: 16px; font-weight: 700; }
-.result .title a { color: var(--accent); text-decoration: none; }
+.result .title a { color: var(--accent-2); text-decoration: none; }
 .result .title a:hover { text-decoration: underline; }
 .result .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .result .score { color: var(--accent-2); font-weight: 700; }
 .suggestions { margin-top: 12px; }
-.suggestions .chip { cursor: pointer; background: #2a2140; color: #c8a8ff; border-color: #3a2f55; }
+.suggestions .chip { cursor: pointer; background: #1f3a2c; color: var(--accent-2); border-color: #2c523c; }
 
 /* table */
 table { width: 100%; border-collapse: collapse; }
@@ -169,6 +173,23 @@ tbody tr:hover { background: var(--bg-soft); }
 .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 .spinner { color: var(--muted); padding: 20px; }
 
+/* in-place expanded detail row */
+.detail-row td { background: var(--bg-soft); padding: 0; }
+.detail-row .card { margin: 6px; }
+
+/* visible, button-shaped external links (distinct from accent blue on dark bg) */
+.link-btn {
+  display: inline-block;
+  background: var(--accent-2);
+  color: #08111f;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.link-btn:hover { filter: brightness(1.08); }
+
 .detail pre {
   white-space: pre-wrap;
   background: var(--bg);
@@ -179,7 +200,7 @@ tbody tr:hover { background: var(--bg-soft); }
   max-height: 320px;
   overflow: auto;
 }
-.banner { background: #2a2140; border: 1px solid #3a2f55; color: #c8a8ff; padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+.banner { background: #2a2140; border: 1px solid #3a2f55; color: var(--text); padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
 .toast {
   position: fixed; bottom: 22px; right: 22px; background: var(--bg-card);
   border: 1px solid var(--accent); color: var(--text); padding: 12px 18px;

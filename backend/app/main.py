@@ -59,7 +59,18 @@ async def health():
     return {"status": "ok", "ollama": ollama, "qdrant_collection": settings.qdrant_collection}
 
 
+class NoCacheStaticFiles(StaticFiles):
+    """StaticFiles that tells the browser never to cache, so frontend edits
+    (CSS/JS) show up on refresh during local development instead of serving
+    a stale cached stylesheet."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+
 if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    app.mount("/", NoCacheStaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 else:
     logging.warning("Frontend dir not found at %s; serving API only", FRONTEND_DIR)

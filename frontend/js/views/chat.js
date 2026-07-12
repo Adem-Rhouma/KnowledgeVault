@@ -21,7 +21,7 @@ function renderResults(r) {
           res.score != null ? ` · relevance <span class="score">${res.score}</span>` : ""
         }${
           res.post_url
-            ? ` · <a href="${esc(res.post_url)}" target="_blank" rel="noopener" class="muted">original post</a>`
+            ? ` · <a href="${esc(res.post_url)}" target="_blank" rel="noopener" class="small">original post</a>`
             : ""
         }</div>
         <div>${esc(res.description || "")}</div>
