@@ -27,6 +27,7 @@ export const api = {
     return req("/api/items?" + q.toString());
   },
   item: (id) => req("/api/items/" + id),
+  itemLog: (id) => req("/api/items/" + id + "/log"),
   updateItem: (id, patch) => req("/api/items/" + id, { method: "PUT", body: JSON.stringify(patch) }),
   review: () => req("/api/review"),
   resolveReview: (id, edit) => req("/api/review/" + id, { method: "PUT", body: JSON.stringify(edit) }),

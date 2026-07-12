@@ -2,11 +2,13 @@ import logging
 from typing import Optional
 
 import asyncio
+import time
 
 from .extraction import classify, extract
 from .config import settings
 from .models import Category, Classification, Item, ItemStatus, RawCapture
 from .ollama import OllamaError
+from .proclog import ProcLog
 from .storage import store
 from .vectorstore import vs
 from .video import process_video
@@ -23,37 +25,89 @@ def _safe_category(value: Optional[str]) -> Optional[Category]:
         return Category.OTHER
 
 
-async def _index(item: Item) -> None:
+def _review_dict(item: Item) -> dict:
+    """The consolidated AI review for an item — everything the model was asked
+    to extract, plus classification and review verdict, in one self-contained
+    block. Persisted to the per-item processing log as `latest`."""
+    return {
+        "project_name": item.project_name,
+        "project_url": item.project_url,
+        "description": item.description,
+        "category": item.category.value if item.category else None,
+        "tech_stack": item.tech_stack,
+        "tags": item.tags,
+        "confidence_score": item.confidence_score,
+        "classification": item.classification.value if item.classification else None,
+        "classification_reason": item.classification_reason,
+        "human_review": item.human_review,
+        "human_review_reason": item.human_review_reason,
+        "transcript": item.transcript,
+        "video_error": item.video_error,
+        "video_urls": item.video_urls,
+        "external_links": item.external_links,
+        "llm_model": item.llm_model,
+        "embed_model": item.embed_model,
+        "status": item.status.value,
+        "error": item.error,
+    }
+
+
+async def _index(item: Item, log: ProcLog) -> None:
+    rec = {"stage": "reindex", "embed_model": settings.ollama_embed_model}
+    t0 = time.monotonic()
     if item.is_indexable:
         await vs.upsert(item)
         item.status = ItemStatus.INDEXED
+        rec["result"] = "indexed"
     else:
         await vs.remove(item.id)
+        rec["result"] = "removed (non-indexable)"
+    rec["status"] = item.status.value
+    rec["duration_s"] = round(time.monotonic() - t0, 2)
+    rec["pass"] = log.next_pass()
+    await log.append(rec)
     await store.save(item)
 
 
 async def process_item(item: Item, skip_video: bool = False) -> Item:
     store.mark_active(item.id)
+    log = ProcLog(item.id)
+    item.llm_model = settings.ollama_llm_model
+    item.embed_model = settings.ollama_embed_model
     try:
         # Stage 0: video/audio (best effort). Done FIRST so the transcript can
         # inform classification + extraction — critical for reels.
         # skip_video=True is used by reprocessing to reuse an existing transcript.
         if item.video_urls and settings.whisper_enabled and not skip_video:
+            rec = {"stage": "video", "model": settings.whisper_model}
+            t0 = time.monotonic()
             try:
                 transcript = await process_video(item)
                 item.transcript = transcript
+                rec["transcript"] = transcript
+                rec["result"] = "transcribed" if transcript else "no transcript"
             except Exception as e:
                 logger.warning("video processing skipped for %s: %s", item.id, e)
                 if not item.video_error:
                     item.video_error = f"video processing error: {e}"[:200]
+                rec["error"] = item.video_error or str(e)[:200]
+            rec["video_error"] = item.video_error
+            rec["duration_s"] = round(time.monotonic() - t0, 2)
+            rec["pass"] = log.next_pass()
+            await log.append(rec)
             await store.save(item)  # persist transcript and/or video_error
 
         # Stage 1: classify (with transcript context for video posts)
         item.status = ItemStatus.PROCESSING
         await store.save(item)
-        cls, reason = await classify(item.raw_text, item.transcript)
+        rec = {"stage": "classify", "model": settings.ollama_llm_model}
+        t0 = time.monotonic()
+        cls, reason = await classify(item.raw_text, item.transcript, record=rec)
         item.classification = cls
         item.classification_reason = reason
+        rec["duration_s"] = round(time.monotonic() - t0, 2)
+        rec["pass"] = log.next_pass()
+        await log.append(rec)
         await store.save(item)
 
         # Non-extractable text posts are done. Video posts fall through to extraction
@@ -61,20 +115,32 @@ async def process_item(item: Item, skip_video: bool = False) -> Item:
         if cls != Classification.EXTRACTABLE:
             if not item.video_urls:
                 item.status = ItemStatus.PROCESSED
-                await _index(item)  # de-index if it was previously indexed
+                await _index(item, log)  # de-index if it was previously indexed
+                await log.set_review(_review_dict(item))
                 return item
             item.human_review = True
             item.human_review_reason = reason or "video post classified non-extractable; review needed"
 
         # Stage 2: structured extraction (post text + transcript + links)
+        rec = {
+            "stage": "extract",
+            "model": settings.ollama_llm_model,
+            "transcript": item.transcript,
+        }
+        t0 = time.monotonic()
         try:
-            data = await extract(item.raw_text, item.transcript, item.external_links)
+            data = await extract(item.raw_text, item.transcript, item.external_links, record=rec)
         except OllamaError as e:
             logger.error("extraction failed for %s: %s", item.id, e)
+            rec["error"] = str(e)[:300]
+            rec["duration_s"] = round(time.monotonic() - t0, 2)
+            rec["pass"] = log.next_pass()
+            await log.append(rec)
             item.human_review = True
             item.human_review_reason = "automated extraction failed"
             item.status = ItemStatus.NEEDS_REVIEW
-            await _index(item)
+            await _index(item, log)
+            await log.set_review(_review_dict(item))
             return item
 
         item.project_name = data.get("project_name")
@@ -100,13 +166,15 @@ async def process_item(item: Item, skip_video: bool = False) -> Item:
         await store.save(item)
 
         # Stage 4: index
-        await _index(item)
+        await _index(item, log)
+        await log.set_review(_review_dict(item))
         return item
     except Exception as e:
         logger.exception("pipeline failed for %s", item.id)
         item.status = ItemStatus.FAILED
         item.error = str(e)[:500]
         await store.save(item)
+        await log.set_review(_review_dict(item))
         return item
     finally:
         store.mark_done(item.id)

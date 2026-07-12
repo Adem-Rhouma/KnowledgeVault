@@ -110,12 +110,21 @@ def _truncate(text: str, n: int = 6000) -> str:
     return text if len(text) <= n else text[:n] + "\n...[truncated]"
 
 
-async def classify(text: str, transcript: Optional[str] = None) -> tuple[Classification, Optional[str]]:
+async def classify(
+    text: str, transcript: Optional[str] = None, record: Optional[dict] = None
+) -> tuple[Classification, Optional[str]]:
     parts = [f"POST TEXT:\n{_truncate(text)}"]
     if transcript:
         parts.append(f"VIDEO TRANSCRIPT (spoken content of a reel/video):\n{_truncate(transcript, 4000)}")
     prompt = "\n\n".join(parts)
-    data = parse_json(await client.generate(prompt, CLASSIFY_SYSTEM, CLASSIFY_SCHEMA))
+    if record is not None:
+        record["prompt"] = prompt
+    response = await client.generate(prompt, CLASSIFY_SYSTEM, CLASSIFY_SCHEMA)
+    if record is not None:
+        record["raw_response"] = response
+    data = parse_json(response)
+    if record is not None:
+        record["parsed"] = data
     cls = data.get("classification", "irrelevant")
     try:
         return Classification(cls), data.get("reason")
@@ -123,12 +132,25 @@ async def classify(text: str, transcript: Optional[str] = None) -> tuple[Classif
         return Classification.IRRELEVANT, f"unparseable classification: {cls}"
 
 
-async def extract(post_text: str, transcript: Optional[str], external_links: list[str]) -> dict:
+async def extract(
+    post_text: str,
+    transcript: Optional[str],
+    external_links: list[str],
+    record: Optional[dict] = None,
+) -> dict:
     parts = [f"POST TEXT:\n{_truncate(post_text)}"]
     if transcript:
         parts.append(f"VIDEO TRANSCRIPT:\n{_truncate(transcript, 4000)}")
     parts.append("EXTERNAL LINKS FOUND IN POST:\n" + ("\n".join(external_links) if external_links else "(none)"))
-    data = parse_json(await client.generate("\n\n".join(parts), EXTRACT_SYSTEM, EXTRACT_SCHEMA))
+    prompt = "\n\n".join(parts)
+    if record is not None:
+        record["prompt"] = prompt
+    response = await client.generate(prompt, EXTRACT_SYSTEM, EXTRACT_SCHEMA)
+    if record is not None:
+        record["raw_response"] = response
+    data = parse_json(response)
+    if record is not None:
+        record["parsed"] = data
     return data
 
 

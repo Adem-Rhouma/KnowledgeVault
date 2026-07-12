@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 
 from ..models import Item, ItemStatus
 from ..pipeline import reprocess_item
+from ..proclog import ProcLog
 from ..storage import store
 from ..vectorstore import vs
 
@@ -48,6 +49,17 @@ async def get_item(item_id: str):
     return item.model_dump(mode="json")
 
 
+@router.get("/items/{item_id}/log")
+async def get_item_log(item_id: str):
+    """Return the structured per-item processing log (all passes) plus the
+    consolidated latest AI review."""
+    item = store.get(item_id)
+    if not item:
+        raise HTTPException(404, "item not found")
+    log = ProcLog(item_id)
+    return {"item_id": item_id, "entries": log.entries(), "latest": log.latest()}
+
+
 @router.put("/items/{item_id}")
 async def update_item(item_id: str, patch: dict):
     known = {k: v for k, v in (patch or {}).items() if k in _ITEM_FIELDS}
@@ -66,6 +78,7 @@ async def delete_item(item_id: str):
         raise HTTPException(404, "item not found")
     await store.delete(item_id)
     await vs.remove(item_id)
+    ProcLog(item_id).remove()
     return {"deleted": item_id}
 
 
