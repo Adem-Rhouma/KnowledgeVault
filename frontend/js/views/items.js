@@ -293,19 +293,52 @@ export async function renderItems(el) {
       <input id="q" placeholder="search name / tag / text" />
       <button id="go">Search</button>
       <span id="count" class="muted small"></span>
+      <label class="small" style="margin-left:auto">Per page</label>
+      <select id="ps">
+        ${[10, 25, 50, 100].map((n) => `<option value="${n}" ${n === 25 ? "selected" : ""}>${n}</option>`).join("")}
+      </select>
     </div>
     <div id="list"></div>
+    <div id="pager" class="pager"></div>
   `;
   const list = el.querySelector("#list");
+  const pager = el.querySelector("#pager");
+  let page = 1;
+  let pageSize = 25;
+  let total = 0;
+
+  const renderPager = () => {
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    if (total === 0) {
+      pager.innerHTML = "";
+      return;
+    }
+    const from = (page - 1) * pageSize + 1;
+    const to = Math.min(total, page * pageSize);
+    pager.innerHTML = `
+      <button class="ghost" id="prev" ${page <= 1 ? "disabled" : ""}>‹ Prev</button>
+      <span class="muted small">${from}–${to} of ${total} · page ${page} / ${pages}</span>
+      <button class="ghost" id="next" ${page >= pages ? "disabled" : ""}>Next ›</button>
+    `;
+    const prev = pager.querySelector("#prev");
+    const next = pager.querySelector("#next");
+    if (prev && page > 1) prev.onclick = () => { page--; load(); };
+    if (next && page < pages) next.onclick = () => { page++; load(); };
+  };
+
   const load = async () => {
     list.innerHTML = '<div class="spinner">Loading…</div>';
     const d = await api.items({
       status: el.querySelector("#status").value,
       q: el.querySelector("#q").value,
+      limit: pageSize,
+      offset: (page - 1) * pageSize,
     });
-    el.querySelector("#count").textContent = `${d.total} items`;
+    total = d.total;
+    el.querySelector("#count").textContent = `${total} items`;
     if (!d.items.length) {
       list.innerHTML = '<div class="empty">No items.</div>';
+      renderPager();
       return;
     }
     list.innerHTML = `<table><thead><tr><th>Project</th><th>Category</th><th>Status</th><th>Review</th><th>Updated</th><th></th></tr></thead><tbody>${d.items
@@ -318,7 +351,21 @@ export async function renderItems(el) {
         handleAct(b);
       };
     });
+    renderPager();
   };
+
+  el.querySelector("#go").onclick = () => { page = 1; load(); };
+  el.querySelector("#q").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { page = 1; load(); }
+  });
+  el.querySelector("#status").onchange = () => { page = 1; load(); };
+  el.querySelector("#ps").onchange = (e) => {
+    pageSize = Number(e.target.value);
+    page = 1;
+    load();
+  };
+  await load();
+}
 
 async function handleAct(b) {
   const id = b.dataset.id;
@@ -345,11 +392,4 @@ async function handleAct(b) {
     const view = b.closest(".view");
     showReview(view, tr, view.querySelector("#list"));
   }
-}
-  el.querySelector("#go").onclick = load;
-  el.querySelector("#q").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") load();
-  });
-  el.querySelector("#status").onchange = load;
-  await load();
 }
