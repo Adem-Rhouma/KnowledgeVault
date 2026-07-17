@@ -1,9 +1,9 @@
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
 
 from ..models import Item, ItemStatus
-from ..pipeline import reprocess_item
 from ..proclog import ProcLog
 from ..storage import store
 from ..vectorstore import vs
@@ -39,6 +39,27 @@ async def list_items(
         "total": len(items),
         "items": [i.model_dump(mode="json") for i in page],
     }
+
+
+class ExistenceCheck(BaseModel):
+    ids: List[str] = []
+    urls: List[str] = []
+
+
+@router.post("/items/exists")
+async def items_exist(body: ExistenceCheck):
+    """Batch check whether posts have already been captured.
+
+    Accepts source_ids and post_urls; returns a map of each key that was found
+    to its current status. Lets the extension show per-post "already in vault"
+    vs "capture" without re-posting duplicates."""
+    found = {}
+    for item in store.all():
+        if item.source_id and item.source_id in body.ids:
+            found[item.source_id] = item.status.value
+        elif item.post_url and item.post_url in body.urls:
+            found[item.post_url] = item.status.value
+    return {"found": found}
 
 
 @router.get("/items/{item_id}")
@@ -86,5 +107,6 @@ async def delete_item(item_id: str):
 async def reprocess_one(item_id: str, request: Request):
     if not store.get(item_id):
         raise HTTPException(404, "item not found")
-    request.app.state.tasks.append(__import__("asyncio").create_task(reprocess_item(item_id)))
+    await store.update(item_id, status=ItemStatus.CAPTURED)
+    request.app.state.pipeline.enqueue(item_id, mode="reprocess")
     return {"id": item_id, "status": "queued"}

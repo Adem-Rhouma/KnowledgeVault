@@ -19,9 +19,15 @@ function refreshStatus() {
   chrome.runtime.sendMessage({ type: "getStatus" }, (resp) => {
     if (!resp || !resp.status) return;
     const s = resp.status;
-    document.getElementById("cap").textContent = s.captured || 0;
     document.getElementById("sent").textContent = s.sent || 0;
     setErr(s.error ? "backend: " + s.error : "");
+  });
+  // The authoritative "captured" total comes from the backend, not the
+  // accumulated queue counter (which overcounts duplicates/requeues).
+  chrome.runtime.sendMessage({ type: "count" }, (resp) => {
+    if (!resp) return;
+    document.getElementById("cap").textContent = resp.ok ? resp.total : "—";
+    if (!resp.ok && resp.error) setErr("backend: " + resp.error);
   });
 }
 

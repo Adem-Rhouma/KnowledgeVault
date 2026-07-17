@@ -37,5 +37,10 @@ class Settings(BaseSettings):
     chat_top_n: int = 8  # final results returned to user
     hybrid_limit: int = 40  # per-index (dense/sparse) prefetch size
 
+    # Processing queue: how many items may be processed by Ollama at once.
+    # 1 keeps Ollama free for other work and means only the item in flight
+    # shows "processing".
+    pipeline_concurrency: int = 1
+
 
 settings = Settings()

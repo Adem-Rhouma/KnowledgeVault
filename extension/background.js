@@ -3,7 +3,7 @@
 
 let queue = [];
 let timer = null;
-let status = { captured: 0, sent: 0, error: null, lastSync: null };
+let status = { sent: 0, error: null, lastSync: null };
 
 chrome.storage.local.get({ kvStatus: null, backendUrl: "http://localhost:8000" }, (r) => {
   if (r.kvStatus) status = r.kvStatus;
@@ -47,7 +47,6 @@ function scheduleFlush() {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === "capture") {
     queue = queue.concat(msg.items || []);
-    status.captured += (msg.items || []).length;
     saveStatus();
     scheduleFlush();
     sendResponse({ ok: true, queued: queue.length });
@@ -55,6 +54,42 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.type === "getStatus") {
     sendResponse({ status });
+    return true;
+  }
+  if (msg.type === "count") {
+    // Authoritative total from the backend (not the accumulated queue counter,
+    // which overcounts duplicates and requeued items).
+    (async () => {
+      const { backendUrl } = await chrome.storage.local.get({ backendUrl: "http://localhost:8000" });
+      try {
+        const r = await fetch(backendUrl + "/api/items?limit=1", { method: "GET" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        sendResponse({ ok: true, total: data.total || 0 });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e.message || e), total: 0 });
+      }
+    })();
+    return true;
+  }
+  if (msg.type === "check") {
+    // Proxy a batch existence check to the backend so all backend comms stay
+    // in the privileged background context (avoids content-script CORS quirks).
+    (async () => {
+      const { backendUrl } = await chrome.storage.local.get({ backendUrl: "http://localhost:8000" });
+      try {
+        const r = await fetch(backendUrl + "/api/items/exists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(msg.payload || {}),
+        });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const data = await r.json();
+        sendResponse({ ok: true, found: data.found || {} });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e.message || e), found: {} });
+      }
+    })();
     return true;
   }
   if (msg.type === "setBackend") {

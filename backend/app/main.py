@@ -7,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .models import ItemStatus
 from .ollama import client
 from .routers import capture, chat, dashboard, items, management, review
 from .storage import store
 from .vectorstore import vs
+from .worker import PipelineController
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -20,11 +22,32 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.tasks = []
+    ctrl = PipelineController(max_concurrent=settings.pipeline_concurrency)
+    app.state.pipeline = ctrl
     await vs.ensure_ready()
     # Sync Qdrant + local BM25 with everything already stored (idempotent).
     n = await vs.reindex_all([i for i in store.all() if i.is_indexable])
     logging.info("Startup reindex complete: %s items indexed", n)
+    # Resume after a restart/crash: items left mid-processing were interrupted, so
+    # send them back to captured, then enqueue everything still pending so nothing
+    # is stuck waiting for a backend that went away.
+    interrupted = 0
+    for it in store.all():
+        if it.status == ItemStatus.PROCESSING:
+            it.status = ItemStatus.CAPTURED
+            await store.save(it)
+            interrupted += 1
+    pending_ids = [i.id for i in store.all() if i.status == ItemStatus.CAPTURED]
+    ctrl.enqueue_many(pending_ids)
+    ctrl.start()
+    logging.info(
+        "Pipeline resumed: %s interrupted, %s pending enqueued (concurrency=%s)",
+        interrupted,
+        len(pending_ids),
+        ctrl.max_concurrent,
+    )
     yield
+    ctrl.stop()
     await client.close()
     await vs.client.close()
 

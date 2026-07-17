@@ -1,11 +1,9 @@
-import asyncio
 from pydantic import BaseModel
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from ..models import Item, ItemStatus, RawCapture
-from ..pipeline import process_item
 from ..storage import store
 
 router = APIRouter(prefix="/api", tags=["capture"])
@@ -38,6 +36,6 @@ async def capture(batch: CaptureBatch, request: Request):
             status=ItemStatus.CAPTURED,
         )
         await store.save(item)
-        request.app.state.tasks.append(asyncio.create_task(process_item(item)))
+        request.app.state.pipeline.enqueue(item.id, mode="process")
         accepted.append({"id": item.id, "status": "queued"})
     return JSONResponse({"accepted": len(accepted), "items": accepted})

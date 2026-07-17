@@ -3,7 +3,6 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
-from ..pipeline import reprocess_all
 from ..storage import store
 from ..vectorstore import vs
 
@@ -28,7 +27,26 @@ async def reprocess(req: ReprocessRequest, request: Request):
     items = store.all()
     if req.status:
         items = [i for i in items if i.status.value == req.status]
-    request.app.state.tasks.append(
-        __import__("asyncio").create_task(reprocess_all(items, redownload=req.redownload))
+    request.app.state.pipeline.enqueue_many(
+        [i.id for i in items], mode="reprocess", redownload=req.redownload
     )
     return {"accepted": len(items), "redownload": req.redownload}
+
+
+@router.post("/admin/pause")
+async def pause(request: Request):
+    """Stop dequeuing new items; the current in-flight item finishes first."""
+    request.app.state.pipeline.pause()
+    return request.app.state.pipeline.status()
+
+
+@router.post("/admin/resume")
+async def resume(request: Request):
+    """Resume processing the queue."""
+    request.app.state.pipeline.resume()
+    return request.app.state.pipeline.status()
+
+
+@router.get("/admin/pipeline")
+async def pipeline_status(request: Request):
+    return request.app.state.pipeline.status()

@@ -71,6 +71,8 @@ async def _index(item: Item, log: ProcLog) -> None:
 
 async def process_item(item: Item, skip_video: bool = False) -> Item:
     store.mark_active(item.id)
+    item.status = ItemStatus.PROCESSING
+    await store.save(item)
     log = ProcLog(item.id)
     item.llm_model = settings.ollama_llm_model
     item.embed_model = settings.ollama_embed_model

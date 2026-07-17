@@ -298,11 +298,47 @@ export async function renderItems(el) {
         ${[10, 25, 50, 100].map((n) => `<option value="${n}" ${n === 25 ? "selected" : ""}>${n}</option>`).join("")}
       </select>
     </div>
+    <div class="toolbar" style="margin-top:10px;align-items:center">
+      <button id="ppause">Pause</button>
+      <span id="pstatus" class="muted small"></span>
+    </div>
     <div id="list"></div>
     <div id="pager" class="pager"></div>
   `;
   const list = el.querySelector("#list");
   const pager = el.querySelector("#pager");
+
+  // Processing queue control: pause after the current item finishes, resume on
+  // demand, and show live pipeline state (so Ollama can be freed for other work).
+  const pauseBtn = el.querySelector("#ppause");
+  const pstatus = el.querySelector("#pstatus");
+  let pipelinePaused = false;
+  if (window.__kvPipeTimer) clearInterval(window.__kvPipeTimer);
+  const refreshPipeline = async () => {
+    try {
+      const s = await api.pipelineStatus();
+      pipelinePaused = s.paused;
+      pauseBtn.textContent = s.paused ? "Resume" : "Pause";
+      pauseBtn.classList.toggle("danger", s.paused);
+      let txt = `processing: ${s.active} · queued: ${s.pending}`;
+      if (s.paused) txt = "paused · " + txt;
+      pstatus.textContent = txt;
+    } catch {
+      /* backend offline */
+    }
+  };
+  pauseBtn.onclick = async () => {
+    try {
+      if (pipelinePaused) await api.resumePipeline();
+      else await api.pausePipeline();
+      await refreshPipeline();
+    } catch (e) {
+      toast("Error: " + e.message);
+    }
+  };
+  window.__kvPipeTimer = setInterval(refreshPipeline, 2000);
+  refreshPipeline();
+
   let page = 1;
   let pageSize = 25;
   let total = 0;

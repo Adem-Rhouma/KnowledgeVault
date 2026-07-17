@@ -38,6 +38,11 @@ export const api = {
   reprocessAll: (opts = {}) =>
     req("/api/admin/reprocess", { method: "POST", body: JSON.stringify(opts) }),
   resetAll: () => req("/api/admin/reset", { method: "DELETE" }),
+
+  // processing queue control
+  pausePipeline: () => req("/api/admin/pause", { method: "POST" }),
+  resumePipeline: () => req("/api/admin/resume", { method: "POST" }),
+  pipelineStatus: () => req("/api/admin/pipeline"),
 };
 
 export function esc(s) {
